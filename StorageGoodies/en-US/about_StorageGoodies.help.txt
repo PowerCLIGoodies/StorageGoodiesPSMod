@@ -1,0 +1,26 @@
+TOPIC
+    about_StorageGoodies
+
+SHORT DESCRIPTION
+    The StorageGoodies module provides functions for managing VMware datastores
+    and SCSI LUNs
+
+LONG DESCRIPTION
+    The StorageGoodies module was written to provide functions for managing
+    VMware datastores and SCSI LUNs.  The module leverages some of the VMware
+    PowerCLI cmdlets, and requires that PowerCLI is installed on the Windows
+    machine on which the StorageGoodies module shall be used.
+
+    When connected to a vCenter, and using this module, one can mount and
+    dismount VMFS datastores on VMHosts, attach and detach SCSI LUNs from
+    VMHosts, and the datastore/LUN status information for the desired objects.
+
+QUICK START
+    Import the VMware PowerCLI module, then import the StorageGoodies module.
+    Get the commands in this module with the Get-Command cmdlet like:
+        Get-Command -Module StorageGoodies
+    Then, go to it by getting mount information, and mounting and dismounting
+    as desired!
+
+SEE ALSO
+    GitHub repo at https://github.com/PowerCLIGoodies/StorageGoodiesPSMod
