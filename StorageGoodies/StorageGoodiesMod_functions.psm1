@@ -37,17 +37,17 @@ function Get-SGDatastoreMountInfo {
 								VMHost = $viewThisHost.Name
 								Mounted = $oDatastoreHostMount.MountInfo.Mounted
 								ScsiLunState = Switch ($oScsiLun.operationalState[0]) {
-											"ok" {"Attached"; break}
-											"off" {"Detached"; break}
-											default {$oScsiLun.operationalstate[0]}
-										} ## end switch
+									"ok" {"Attached"; break}
+									"off" {"Detached"; break}
+									default {$oScsiLun.operationalstate[0]}
+								} ## end switch
 							}) ## end new-object
 						} ## end if
 					} ## end foreach
 				} ## end foreach
 			} ## end if
 		} ## end foreach
-	} ## end proces
+	} ## end process
 } ## end fn
 
 
@@ -136,7 +136,7 @@ function Get-SGDatastoreMountInfo {
 # 			if (-not ($true -eq ($Datastore.ExtensionData.Host | Where-Object {$_.Key -eq $viewThisHost.MoRef}).MountInfo.Mounted)) {
 # 				if ($PSCmdlet.ShouldProcess("VMHost '$($viewThisHost.Name)'", "Mounting VMFS Datastore '$($Datastore.Name)'")) {
 # 					$viewStorageSysThisHost = Get-View $viewThisHost.ConfigManager.StorageSystem -Property $arrStorageSystemViewPropertiesToGet
-# 					$viewStorageSysThisHost.MountVmfsVolume($Datastore.ExtensionData.Info.vmfs.uuid);
+# 					$viewStorageSysThisHost.MountVmfsVolume($Datastore.ExtensionData.Info.vmfs.uuid)
 # 				} ## end if
 # 			} ## end if
 # 			else {Write-Verbose -Verbose "Datastore '$($Datastore.Name)' already mounted on VMHost '$($viewThisHost.Name)'"}
