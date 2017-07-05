@@ -5,8 +5,9 @@ Some of the updates include:
 - `-WhatIf` support where appropriate
 - expanded support for parameters-from-pipeline
 - ability to act on datastores at a per-host level, versus just at "all attached hosts" level
-- ability to set a SCSILun to "detached" state by LUN canonical name (instead of just by datastore object)
+- ability to set a SCSILun to "detached" (dismounted) state by LUN canonical name (instead of just by datastore object)
 - updated nouns in function names to correspond with the thing on which the function is acting (the SCSI LUN on some, instead of datastore)
+- updated function names to use PowerShell approved verbs (using the approved `Mount`/`Dismount` verbs in place of the non-approved `Attach`/`Detach`/`Unmount` verbs)
 - some various optimizations for increased speed in some areas
 - built-in help for the cmdlets
 - a fleshed out module structure with pertinent information for publishing to the [PowerShellGallery](https://powershellgallery.com)
