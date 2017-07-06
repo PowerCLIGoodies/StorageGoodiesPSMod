@@ -4,6 +4,11 @@ function Get-SGDatastoreMountInfo {
 
 	.Example
 	Get-Datastore mydatastore0 | Get-SGDatastoreMountInfo
+	Get info about the datastore and associated SCSI LUN(s) for all VMHosts with which the datastore is associated
+
+	.Example
+	Get-Datastore mydatastore0 | Get-SGDatastoreMountInfo -VMHost (Get-VMHost myhost0.dom.com, myhost1.dom.com)
+	Get info about the datastore and associated SCSI LUN(s) for just the given VMHosts
 
 	.Outputs
 	PSCustomObject
@@ -12,7 +17,10 @@ function Get-SGDatastoreMountInfo {
 	[OutputType([System.Management.Automation.PSCustomObject])]
 	param (
 		## Datastore object(s) for which to get datastore mount- and SCSI LUN state information
-		[parameter(Mandatory=$true,ValueFromPipeline=$true)][VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.VmfsDatastore[]]$Datastore
+		[parameter(Mandatory=$true,ValueFromPipeline=$true)][VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.VmfsDatastore[]]$Datastore,
+
+		## VMHost(s) for which to get datastore mount- and SCSI LUN state information for the given datastore; if non specified, will get info for all VMHosts with which the given datastore is associated
+		[parameter(ParameterSetName="SelectedVMHosts")][VMware.VimAutomation.Types.VMHost[]]$VMHost
 	) ## end param
 
 	begin {$arrHostsystemViewPropertiesToGet = "Name","ConfigManager.StorageSystem"; $arrStorageSystemViewPropertiesToGet = "SystemFile","StorageDeviceInfo.ScsiLun"}
@@ -24,7 +32,9 @@ function Get-SGDatastoreMountInfo {
 			$arrDStoreExtentCanonicalNames = $viewThisDStore.Info.Vmfs.Extent | Foreach-Object {$_.DiskName}
 			## if there are any hosts associated with this datastore (though, there always should be)
 			if ($viewThisDStore.Host) {
-				foreach ($oDatastoreHostMount in $viewThisDStore.Host) {
+				## the DatastoreHostMount objects of interest:  if -VMHost is specified, just the DatastoreHostMount objects for those VMHost(s); else, the DatastoreHostMount objects for all VMHosts associated with the given datastore
+				$arrDatastoreHostMountOfInterest = if ($PSBoundParameters.ContainsKey("VMHost")) {$viewThisDStore.Host | Where-Object {$VMHost.Id -contains $_.Key}} else {$viewThisDStore.Host}
+				foreach ($oDatastoreHostMount in $arrDatastoreHostMountOfInterest) {
 					## get the HostSystem and StorageSystem Views
 					$viewThisHost = Get-View $oDatastoreHostMount.Key -Property $arrHostsystemViewPropertiesToGet
 					$viewStorageSys = Get-View $viewThisHost.ConfigManager.StorageSystem -Property $arrStorageSystemViewPropertiesToGet
