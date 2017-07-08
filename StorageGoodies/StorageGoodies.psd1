@@ -69,7 +69,7 @@ PowerShellVersion = '4.0'
 NestedModules = @('StorageGoodies_supportingFunctions.ps1')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
-FunctionsToExport = 'Get-SGDatastoreMountInfo', 'Dismount-SGDatastore', 
+FunctionsToExport = 'Get-SGDatastoreMountInfo', 'Dismount-SGDatastore',
                'Mount-SGDatastore', 'Dismount-SGScsiLun', 'Mount-SGScsiLun'
 
 # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -88,8 +88,8 @@ AliasesToExport = @()
 # ModuleList = @()
 
 # List of all files packaged with this module
-FileList = 'StorageGoodies.psd1', 'StorageGoodiesMod_functions.psm1', 
-               'StorageGoodies_supportingFunctions.ps1', 
+FileList = 'StorageGoodies.psd1', 'StorageGoodiesMod_functions.psm1',
+               'StorageGoodies_supportingFunctions.ps1',
                'en-US\about_StorageGoodies.help.txt'
 
 # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
@@ -116,7 +116,7 @@ PrivateData = @{
         # ExternalModuleDependencies = ''
 
     } # End of PSData hashtable
-    
+
  } # End of PrivateData hashtable
 
 # HelpInfo URI of this module
