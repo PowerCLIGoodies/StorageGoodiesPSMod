@@ -1,5 +1,7 @@
-## helper function used internally by exported function to actually do the detach of the SCSI LUN
 function _Dismount-SGScsiLun_helper {
+<#	.Description
+	Helper function used internally by exported function to actually do the detach of the SCSI LUN
+#>
 	[CmdletBinding(SupportsShouldProcess=$true,ConfirmImpact="High")]
 	param(
 		## MoRefs of HostSystems from which to detach SCSI LUN
