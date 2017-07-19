@@ -67,15 +67,15 @@ function Dismount-SGDatastore {
 
 	.Example
 	Dismount-SGDatastore -RunAsync -Datastore (Get-Datastore -Name myOldDatastore_*)
-	Unmount the given VMFS datastores most efficiently (least overhead):  per VMHost involved, there is just one invocation to unmount and all VMFS UUIDs are passed at that time (versus invoking one unmount call per VMFS UUID). And, a Task object is returned for each VMHost involved
+	Dismount the given VMFS datastores most efficiently (least overhead):  per VMHost involved, there is just one invocation to unmount and all VMFS UUIDs of interest are passed at that time (versus invoking one unmount call per VMFS UUID). And, a Task object is returned for each VMHost involved
 
 	.Example
 	Get-Datastore myOldDatastore0 | Dismount-SGDatastore -VMHost (Get-VMHost myhost0.dom.com, myhost1.dom.com)
-	Unmounts the VMFS volume myOldDatastore0 from specified VMHosts
+	Dismounts the VMFS volume myOldDatastore0 from specified VMHosts
 
 	.Example
 	Get-Datastore myOldDatastore1 | Dismount-SGDatastore
-	Unmounts, synchronously, the VMFS volume myOldDatastore1 from all VMHosts associated with the datastore
+	Dismounts, synchronously, the VMFS volume myOldDatastore1 from all VMHosts associated with the datastore
 
 	.Outputs
 	None for synchronous operations or a VMware.VimAutomation.Types.Task object, one per VMHost involved, for asynchronous operations
@@ -210,57 +210,118 @@ function Dismount-SGScsiLun {
 		Dismount ("detach") SCSI LUN(s) from VMHost(s).  If specifying host, needs to be a VMHost object (as returned from Get-VMHost).  This was done to avoid any "matched host with similar name pattern" problems that may occur if accepting host-by-name.
 
 		.Example
-		Get-Datastore myOldDatastore0 | Dismount-SGScsiLun -VMHost (Get-VMHost myhost0.dom.com, myhost1.dom.com)
-		Dismounts ("detaches") the SCSI LUN associated with datastore myOldDatastore0 from specified VMHosts
+		Dismount-SGScsiLun -Datastore (Get-Datastore myOldDatastore*) -RunAsync
+		Dismounts ("detaches") the SCSI LUNs associated with given datastores from specified VMHosts, running asynchronously, returning the corresponding task object.
+		This is the most efficient (least overhead) means:  per VMHost involved, there is just one invocation to dismount (detach) and all SCSI LUN UUIDs of interest are passed at that time (versus invoking one dismount call per SCSI LUN UUID involved)
 
 		.Example
-		Dismount-SGScsiLun -VMHost (Get-VMHost myhost0.dom.com, myhost1.dom.com) -CanonicalName naa.60000970000192601761533037364335
-		Dismounts ("detaches") the SCSI LUN associated with datastore myOldDatastore0 from specified VMHosts
+		Dismount-SGScsiLun -VMHost (Get-VMHost myhost0.dom.com, myhost1.dom.com) -CanonicalName naa.514f123456700006, naa.514f123456700007
+		Dismounts ("detaches") the SCSI LUNs with given canonical names from specified VMHosts
 
 		.Example
 		Get-Datastore myOldDatastore1 | Dismount-SGScsiLun
 		Dismounts ("detaches") the SCSI LUN associated with datastore myOldDatastore1 from all VMHosts associated with the datastore
 
 		.Outputs
-		None
+		None or Task object if running asynchronously
 	#>
 	[CmdletBinding(SupportsShouldProcess=$true,DefaultParameterSetName="ByDatastore",ConfirmImpact="High")]
 	param (
-		## One or more datastore objects to whose SCSI LUN to dismount ("detach")
+		## One or more datastore objects whose associated SCSI LUN(s) to dismount ("detach")
 		[Parameter(Mandatory=$true,ValueFromPipeline=$true,ParameterSetName="ByDatastore")][VMware.VimAutomation.ViCore.Types.V1.DatastoreManagement.VmfsDatastore[]]$Datastore,
 
 		## One or more canonical name of SCSI LUN to dismount ("detach")
 		[Parameter(Mandatory=$true,ValueFromPipeline=$true,ParameterSetName="ByCanonicalName")][string[]]$CanonicalName,
 
-		## VMHost(s) on which to dismount ("detach") the SCSI LUN;
-		#   when passing Datastore value, if VMHost specified, this will detach the SCSI LUN on all VMHosts that have it attached
-		#   when passing CanonicalName value, VMHost is mandatory
-		[Parameter(ParameterSetName="ByDatastore")][Parameter(Mandatory=$true,ParameterSetName="ByCanonicalName")][VMware.VimAutomation.Types.VMHost[]]$VMHost
+		## VMHost(s) on which to dismount ("detach") the SCSI LUN. When passing -Datastore value, if no -VMHost specified, this will detach the SCSI LUN on all VMHosts that have it attached. When passing -CanonicalName value, -VMHost is mandatory.
+		[Parameter(ParameterSetName="ByDatastore")][Parameter(Mandatory=$true,ParameterSetName="ByCanonicalName")][VMware.VimAutomation.Types.VMHost[]]$VMHost,
+
+		## Switch:  Run command asynchronously? If so, returns a Task object for the dismount operation, one task per VMHost involved. Can potentially result in quicker operations, depending on the means in which function is invoked. See examples for more information
+		[Switch]$RunAsync
 	) ## end parm
-	begin {
-	} ## end begin
+
+	begin {$arrHostsystemViewPropertiesToGet = "Name","ConfigManager.StorageSystem"; $arrStorageSystemViewPropertiesToGet = "SystemFile","StorageDeviceInfo.ScsiLun"}
 
 	process {
-		Switch ($PSCmdlet.ParameterSetName) {
-			"ByDatastore" {
-				foreach ($dstThisOne in $Datastore) {
-					## get the canonical names for all of the extents that comprise this datastore
-					$arrDStoreExtentCanonicalNames = $dstThisOne.ExtensionData.Info.Vmfs.Extent | Foreach-Object {$_.DiskName}
-					## if there are any hosts associated with this datastore (though, there always should be)
-					if ($dstThisOne.ExtensionData.Host) {
-						## the MoRefs of the HostSystems upon which to act
-						$arrMoRefsOfHostSystemsForDetach = if ($PSBoundParameters.ContainsKey("VMHost")) {$VMHost | Foreach-Object {$_.Id}} else {$dstThisOne.ExtensionData.Host | Foreach-Object {$_.Key}}
-						### call helper
-						_Dismount-SGScsiLun_helper -HostSystemMoRef $arrMoRefsOfHostSystemsForDetach -DStoreExtentCanonicalName $arrDStoreExtentCanonicalNames
+		## overview:
+		## determine, for each host, the SCSI LUNs to dismount;  this is a hashtable of (hostsystem Id -> array of zero or more SCSI LUN canonical names) key/value pairs
+		#      if $VMHost is specified, the $VMhost.Id property for keys, and for values:
+		#         if $Datastore is specified, values of $Datastore where $_.ExtensionData.Host.key -contains $thisHost.Id foreach object $_.ExtensionData.Info.Vmfs.Extent | Foreach-Object {$_.DiskName}
+		#         else values of $CanonicalName
+		#      else, make hashtable w/ Keys of all of the $Datastore.ExtensionData.Host.key, and for each host key, values of $Datastore where $_.ExtensionData.Host.key -contains $thisHost.Id foreach object $_.ExtensionData.Info.Vmfs.Extent | Foreach-Object {$_.DiskName}
+		#  then, get view of all host systems, and foreach hostsystem (get the hoststoragesystem, then) {
+		#    if runasync {DetachScsiLunEx_Task(<all SCSI LUN UUIDs involved for this VMHost>)}
+		#    else {foreach SCSI LUN canonical name for this VMHost, invoke DetachScsiLun(<given Scsi LUN's UUID>)}
+
+
+		## the IDs of the VMHosts from which to detach any SCSI LUN(s)
+		$arrIDsOfHostSystemsForDetach = if ($PSBoundParameters.ContainsKey("VMHost")) {
+			## if $VMHost was specified, use just those VMHosts' IDs
+			$VMHost | Foreach-Object {$_.Id}
+		} else {
+			## else, use the unique host IDs (which are MoRefs .ToString()) of all of the VMHosts involved with all of the given datastores, per the datastores' Host property
+			$Datastore | Foreach-Object {$_.ExtensionData.Host} | Foreach-Object {$_.Key} | Foreach-Object {$_.ToString()} | Sort-Object -Unique
+		} ## end else
+		## the hashtable of VMHostID -> (zero-or-more SCSI LUN canonical names upon which to act)
+		$hshHostIdToScsiLunCanoNameToDetach = @{}
+		## foreach VMHost ID, either get the SCSI LUN canonical names in $Datastore that are associated with said VMHost ID if ByDatastore, or just specify all of the $CanonicalName
+		$arrIDsOfHostSystemsForDetach | Foreach-Object {
+			$strThisHostId = $_
+			$hshHostIdToScsiLunCanoNameToDetach[$strThisHostId] =
+				## for this VMHost ID, for the datastores that have a hostmount info object associated with the VMHost, get the disknames (canonical names) of the VMFS datastore's extents
+				if ($PSCmdlet.ParameterSetName -eq "ByDatastore") {
+					$Datastore | Where-Object {($_.ExtensionData.Host.Key | Foreach-Object {$_.ToString()}) -contains $strThisHostId} | Foreach-Object {$_.ExtensionData.Info.Vmfs.Extent} | Foreach-Object {$_.DiskName}
+				} ## end if
+				## else, this host ID gets all of the specified $CanonicalName values
+				else {$CanonicalName}
+		} ## end foreach-object
+
+		## get view of all HostSystems and detach the given SCSI LUNs (per the given canonical names) in the appropriate way (asynch or synch)
+		Get-View -Id $hshHostIdToScsiLunCanoNameToDetach.Keys -Property $arrHostsystemViewPropertiesToGet | Foreach-Object {
+			## get the StorageSystem for this HostSystem, via which to invoke to appropriate Detach method
+			$viewThisHost = $_; $strThisHostId = $_.MoRef.ToString()
+			$viewStorageSysThisHost = Get-View -Property $arrStorageSystemViewPropertiesToGet -Id $viewThisHost.ConfigManager.StorageSystem
+
+			# if there is one or more SCSI LUN canonical name for this host, take action for this host (could be zero if caller specified a host that is not associated with the datastores specified)
+			$intNumSCSILunToDetach_thisHost = ($hshHostIdToScsiLunCanoNameToDetach[$strThisHostId] | Measure-Object).Count
+			if ($intNumSCSILunToDetach_thisHost -gt 0) {
+				## if the call was to run this asynchronously
+				if ($RunAsync) {
+					## action message to use for ShouldProcess/Verbose output information
+					$strShouldProcess_actionMsg = "Dismount ('detach') {0}SCSI LUN{1} asynchronously" -f $(
+						if ($intNumSCSILunToDetach_thisHost -ne 1) {"$intNumSCSILunToDetach_thisHost ", "s"}
+						else {"", " '$($hshHostIdToScsiLunCanoNameToDetach[$strThisHostId])'"}
+					)
+					## detach all of the given SCSI LUNs in one call for this hostsystem via DetachScsiLunEx_Task()
+					if ($PSCmdlet.ShouldProcess("VMHost '$($viewThisHost.Name)'", $strShouldProcess_actionMsg)) {
+						## if this host storage system has any of the SCSI LUNs specified by the given canonical names, detach the matching SCSI LUNs
+						if ($arrUuidOfScsiLunToDetach = ($viewStorageSysThisHost.StorageDeviceInfo.ScsiLun | Where-Object {$hshHostIdToScsiLunCanoNameToDetach[$strThisHostId] -contains $_.CanonicalName}).Uuid) {
+							# call actual method once with all of the UUIDs for the SCSI LUNs to detach from this host
+							$oTaskMoref = $viewStorageSysThisHost.DetachScsiLunEx_Task($arrUuidOfScsiLunToDetach)
+							## return the Task object for this operation
+							Get-Task -Id $oTaskMoref
+						} ## end if
 					} ## end if
-				} ## end foreach
-			} ## end case
-			"ByCanonicalName" {
-				$arrMoRefsOfHostSystemsForDetach = $VMHost | Foreach-Object {$_.Id}
-				### call helper
-				_Dismount-SGScsiLun_helper -HostSystemMoRef $arrMoRefsOfHostSystemsForDetach -DStoreExtentCanonicalName $CanonicalName
-			} ## end case
-		} ## end switch
+				} ## end if
+
+				else {
+					## for this hostsystem, foreach pertinent SCSI LUN to detach (get from hashtable by hostsystem ID), detach given SCSI LUN UUID via DetachScsiLun()
+					$hshHostIdToScsiLunCanoNameToDetach[$strThisHostId] | Foreach-Object {
+						$strScsiLunCanoNameToDetach_thisOne = $_
+						if ($PSCmdlet.ShouldProcess("VMHost '$($viewThisHost.Name)'", "Dismount ('detach') SCSI LUN '$strScsiLunCanoNameToDetach_thisOne'")) {
+							## if the host storagesystem has a SCSI LUN with this canonical name, grab the SCSI LUN's UUID and detach
+							if ($strUuidOfScsiLunToDetach = ($viewStorageSysThisHost.StorageDeviceInfo.ScsiLun | Where-Object {$_.CanonicalName -eq $strScsiLunCanoNameToDetach_thisOne}).Uuid) {
+								## add try/catch here?  and, return something here?
+								$viewStorageSysThisHost.DetachScsiLun($strUuidOfScsiLunToDetach)
+							} ## end if
+							else {Write-Verbose "No SCSI LUN with canonical name '$strScsiLunCanoNameToDetach_thisOne' found on VMHost '$($viewThisHost.Name)'. Taking no action for such a SCSI LUN for this VMHost"}
+						} ## end if
+					} ## end foreach-object
+				} ## end else
+			} ## end if
+			## else, there were no datastores/canonical names upon which to act for this VMHost
+			else {Write-Verbose "No items in '-Datastore' or '-CanonicalName' parameter are associated with VMHost '$($viewThisHost.Name) -- taking no action for this VMHost'"}
+		} ## end foreach-object (foreach hostsystem)
 	} ## end process
 } ## end fn
 
@@ -317,7 +378,7 @@ function Mount-SGScsiLun {
 				if ($arrLunsToAttach_CanonicalNames -contains $oScsiLun.canonicalName) {
 					## if this SCSI LUN is not already attached
 					if (-not ($oScsiLun.operationalState[0] -eq "ok")) {
-						if ($PSCmdlet.ShouldProcess("VMHost '$($viewThisHost.Name)'", "Attach LUN '$($oScsiLun.CanonicalName)'")) {
+						if ($PSCmdlet.ShouldProcess("VMHost '$($viewThisHost.Name)'", "Mount ('attach') LUN '$($oScsiLun.CanonicalName)'")) {
 							$viewStorageSysThisHost.AttachScsiLun($oScsiLun.Uuid)
 						} ## end if
 					} ## end if

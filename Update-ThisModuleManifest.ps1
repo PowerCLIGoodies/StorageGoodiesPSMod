@@ -14,13 +14,13 @@ begin {
 		ModuleVersion = "1.0.0"
 		CompanyName = 'PowerCLIGoodies for the VMware PowerCLI community'
 		Copyright = "MIT License"
-		Description = "Module with functions for managing VMware datastores and SCSI LUNs"
+		Description = "Module with functions for managing VMware datastores and SCSI LUNs, based on community works by Alan Renouf and William Lam"
 		# AliasesToExport = @()
-		FileList = Write-Output "${strModuleName}.psd1" "${strModuleName}Mod_functions.psm1" "${strModuleName}_supportingFunctions.ps1" "en-US\about_${strModuleName}.help.txt"
+		FileList = Write-Output "${strModuleName}.psd1" "${strModuleName}Mod_functions.psm1" "en-US\about_${strModuleName}.help.txt"
 		FunctionsToExport = Write-Output Get-SGDatastoreMountInfo, Dismount-SGDatastore, Mount-SGDatastore, Dismount-SGScsiLun, Mount-SGScsiLun
 		IconUri = "https://avatars0.githubusercontent.com/u/10615837"
 		LicenseUri = "https://github.com/PowerCLIGoodies/StorageGoodiesPSMod/blob/master/License"
-		NestedModules = Write-Output "${strModuleName}_supportingFunctions.ps1"
+		# NestedModules = Write-Output "${strModuleName}_supportingFunctions.ps1"
 		ProjectUri = "https://github.com/PowerCLIGoodies/StorageGoodiesPSMod"
 		ReleaseNotes = "See release notes at https://github.com/PowerCLIGoodies/StorageGoodiesPSMod/blob/master/ChangeLog.md"
 		RootModule = "${strModuleName}Mod_functions.psm1"
